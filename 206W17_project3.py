@@ -20,7 +20,7 @@ import twitter_info # same deal as always...
 import json
 import sqlite3
 
-## Your name:
+## Your name: Aiwei Wu
 ## The names of anyone you worked with on this project:
 
 #####
@@ -49,16 +49,39 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 
 CACHE_FNAME = "SI206_project3_cache.json"
 # Put the rest of your caching setup here:
-
+try:
+	cache_file = open(CACHE_FNAME,'r')
+	cache_contents = cache_file.read()
+	cache_file.close()
+	CACHE_DICTION = json.loads(cache_contents)
+except:
+	CACHE_DICTION = {}
 
 
 # Define your function get_user_tweets here:
 
+def get_user_tweets(input: object) -> object:
+	unique_identifier = "twitter_{}".format(input)
+	if unique_identifier in CACHE_DICTION:
+		# print('using cached data for', input)
+		twitter_result = CACHE_DICTION[unique_identifier]
+	else:
+		# print('getting data from internet for', input)
+		twitter_result = api.user_timeline(id =input, count = 3)
+		CACHE_DICTION[unique_identifier] = twitter_result
+		f = open(CACHE_FNAME, 'w')
+		f.write(json.dumps(CACHE_DICTION))
 
+
+	print (len(twitter_result[0]))
+	return twitter_result
 
 
 # Write an invocation to the function for the "umich" user timeline and save the result in a variable called umich_tweets:
 
+umich_tweets = get_user_tweets("umich")
+# for t in umich_tweets:
+# 	print (t)
 
 
 
@@ -80,7 +103,8 @@ CACHE_FNAME = "SI206_project3_cache.json"
 # - user_id (containing the string id belonging to the user, from twitter data) -- this column should be the PRIMARY KEY of this table
 # - screen_name (containing the screen name of the user on Twitter)
 # - num_favs (containing the number of tweets that user has favorited)
-# - description (text containing the description of that user on Twitter, e.g. "Lecturer IV at UMSI focusing on programming" or "I tweet about a lot of things" or "Software engineer, librarian, lover of dogs..." -- whatever it is. OK if an empty string)
+# - description (text containing the description of that user on Twitter, e.g. 
+# "Lecturer IV at UMSI focusing on programming" or "I tweet about a lot of things" or "Software engineer, librarian, lover of dogs..." -- whatever it is. OK if an empty string)
 
 ## You should load into the Users table:
 # The umich user, and all of the data about users that are mentioned in the umich timeline. 
@@ -92,8 +116,50 @@ CACHE_FNAME = "SI206_project3_cache.json"
 
 ## HINT: There's a Tweepy method to get user info that we've looked at before, so when you have a user id or screenname you can find alllll the info you want about the user.
 ## HINT #2: You may want to go back to a structure we used in class this week to ensure that you reference the user correctly in each Tweet record.
-## HINT #3: The users mentioned in each tweet are included in the tweet dictionary -- you don't need to do any manipulation of the Tweet text to find out which they are! Do some nested data investigation on a dictionary that represents 1 tweet to see it!
+## HINT #3: The users mentioned in each tweet are included in the tweet dictionary -- you don't need to do any manipulation of the Tweet text to find out which they are! 
+## Do some nested data investigation on a dictionary that represents 1 tweet to see it!
+conn = sqlite3.connect('project3_tweets.db')
+cur = conn.cursor()
 
+cur.execute("DROP TABLE IF EXISTS Users ")
+cur.execute("DROP TABLE IF EXISTS Tweets ")
+
+table_spec_2 = "CREATE TABLE IF NOT EXISTS "
+table_spec_2 += 'Users (tweet_id INTEGER PRIMARY KEY, '
+table_spec_2 += 'screen_name TEXT, num_favs INTEGER, description TEXT)'
+cur.execute(table_spec_2)
+
+
+table_spec = "CREATE TABLE IF NOT EXISTS "
+table_spec += 'Tweets (user_id INTEGER PRIMARY KEY, '
+table_spec += 'text TEXT, user_posted INTEGER, time_posted TIMESTAMP, retweets INTEGER)'
+cur.execute(table_spec)
+
+
+
+print ("gggggg")
+statement = 'INSERT OR IGNORE INTO Users VALUES (?, ?, ?, ?)'
+for tweet in umich_tweets:
+	input = tweet["entities"]["user_mentions"]
+	# print (input)
+	for i in input:
+		user_id = i["id_str"]
+		# print (user_id)
+		users = api.get_user(user_id)
+		# print (users["id"])
+		# print (users["status"]["favorite_count"])
+		cur.execute(statement, [users["id"], users["screen_name"], users["status"]["favorite_count"], users["description"]])
+conn.commit()
+statement = 'INSERT OR IGNORE INTO Tweets VALUES (?, ?, ?, ?, ?)'
+for t in umich_tweets:
+    cur.execute(statement, [t["id"], t["text"], t["id"], t["created_at"],  t["retweet_count"]])
+conn.commit()
+
+# select_sql = "SELECT * FROM Tweets WHERE user_posted = ?"
+# cur.execute(select_sql, (hashtag,))
+# for item in cur:
+# 	print (item)
+conn.close()
 
 
 
@@ -109,6 +175,7 @@ CACHE_FNAME = "SI206_project3_cache.json"
 # All of the following sub-tasks require writing SQL statements and executing them using Python.
 
 # Make a query to select all of the records in the Users database. Save the list of tuples in a variable called users_info.
+
 
 # Make a query to select all of the user screen names from the database. Save a resulting list of strings (NOT tuples, the strings inside them!) in the variable screen_names. HINT: a list comprehension will make this easier to complete!
 
